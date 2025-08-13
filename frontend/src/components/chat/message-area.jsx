@@ -138,6 +138,8 @@ const MessageArea = (props) => {
   }, []);
 
   useEffect(() => {
+    socket.emit("join_chat", { friend_id: friendId });
+
     const handleMessageEvent = wsMessageHandler(setMessages);
     const handleReadEvent = wsReadHandler(setMessages);
     const handleDeleteEvent = wsDeleteHandler(setMessages);
@@ -147,6 +149,8 @@ const MessageArea = (props) => {
     socket.on("delete", handleDeleteEvent);
 
     return () => {
+      socket.emit("leave_chat", { friend_id: friendId });
+
       socket.off("message", handleMessageEvent);
       socket.off("read", handleReadEvent);
       socket.off("delete", handleDeleteEvent);

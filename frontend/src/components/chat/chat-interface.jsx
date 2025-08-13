@@ -17,6 +17,8 @@ const ChatInterface = ({ friend }) => {
   const { socket } = useChatSocketContext();
   const { user } = useGlobalContext();
 
+  
+
   const memoSetMessages = useCallback(setMessages, []);
 
   /**

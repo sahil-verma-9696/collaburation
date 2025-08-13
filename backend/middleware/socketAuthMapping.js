@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import User from "../models/User.js";
 
-export function socketAuthAndMapping(idToSocketMap) {
+export function socketAuthAndMapping(namespace, idToSocketMap) {
   return async (socket, next) => {
     const { id: userId } = socket.handshake.query;
 
@@ -12,7 +12,7 @@ export function socketAuthAndMapping(idToSocketMap) {
     try {
       // Mark user active in DB
       const updatedUser = await User.findByIdAndUpdate(userId, {
-        status: "online",
+        status: "active",
       });
 
       // Map user → socket
@@ -23,11 +23,9 @@ export function socketAuthAndMapping(idToSocketMap) {
       socket.idToSocketMap = idToSocketMap;
       socket.user = updatedUser;
 
-      const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
-        (userId) => userId !== socket.userId
-      );
+      const onlineUserIds = Array.from(socket.idToSocketMap.keys());
 
-      socket.emit("get_online_users", onlineUserIds);
+      namespace.emit("active_users", onlineUserIds);
 
       console.log(
         chalk.greenBright(`[SOCKET CONNECT]`) +
@@ -42,7 +40,7 @@ export function socketAuthAndMapping(idToSocketMap) {
           (userId) => userId !== socket.userId
         );
 
-        socket.emit("get_online_users", onlineUserIds);
+        namespace.emit("active_users", onlineUserIds);
 
         try {
           await User.findByIdAndUpdate(userId, { status: "offline" });

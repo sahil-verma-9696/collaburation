@@ -17,7 +17,10 @@ function initialiseSocketServer(httpServer, options) {
   const namespaces = ["/ws", "/ws/chat", "/ws/notifications"];
 
   namespaces.forEach((ns) => {
-    socketServer.of(ns).use(socketAuthAndMapping(idToSocketMap));
+    const namespaceInstance = socketServer.of(ns);
+    namespaceInstance.use(
+      socketAuthAndMapping(namespaceInstance, idToSocketMap)
+    );
   });
 
   const rootNamespace = socketServer.of("/ws");
@@ -25,7 +28,7 @@ function initialiseSocketServer(httpServer, options) {
   const notificationNamespace = socketServer.of("/ws/notifications");
 
   rootNamespace.on("connection", rootNamespaceHandler());
-  chatNamespace.on("connection", chatNamespaceHandler());
+  chatNamespace.on("connection", chatNamespaceHandler(chatNamespace));
   // notificationNamespace.on("connection", notificationNamespaceHandler());
 
   return socketServer;

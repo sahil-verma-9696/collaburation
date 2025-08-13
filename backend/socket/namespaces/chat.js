@@ -3,13 +3,71 @@ import Friendship from "../../models/Friendship.js";
 import User from "../../models/User.js";
 import chalk from "chalk";
 
-export function chatNamespaceHandler() {
+export function chatNamespaceHandler(namespace) {
   return (socket) => {
-
     // Join user to their personal room for direct messaging
     socket.join(`user_${socket.userId}`);
 
-    // Handle sending messages
+    // socket.on("get_online_users", async () => {
+    //   // Get all online user IDs except current user
+    //   const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
+    //     (userId) => userId !== socket.userId
+    //   );
+    // });
+
+    // Handle getting online users (when user connects)
+    socket.on("join_chat", async (data) => {
+      try {
+        // Get all online user IDs except current user
+        const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
+          (userId) => userId !== socket.userId
+        );
+
+        await User.findByIdAndUpdate(socket.userId, { status: "online" });
+
+        // Get user details for online users
+        const onlineUsers = await User.find({
+          status: "online",
+        }).select("name email avatar status");
+
+        socket.emit("get_online_users", onlineUsers);
+
+        // Notify others that this user is online
+        socket.broadcast.emit("online_user", {
+          user_id: socket.userId,
+          user_name: socket.user.name,
+          user_avatar: socket.user.avatar || null,
+          timestamp: new Date(),
+          status: "online",
+        });
+      } catch (error) {
+        console.error("Get online users error:", error);
+        socket.emit("error", {
+          event: "online_user",
+          message: "Failed to get online users",
+        });
+      }
+    });
+
+    socket.on("leave_chat", async () => {
+      await User.findByIdAndUpdate(socket.userId, { status: "active" });
+
+      // Get user details for online users
+      const onlineUsers = await User.find({
+        status: "online",
+      }).select("name email avatar status");
+
+      socket.emit("get_online_users", onlineUsers);
+
+      // Notify others that this user is offline
+      socket.broadcast.emit("online_user", {
+        user_id: socket.userId,
+        timestamp: new Date(),
+        status: "offline",
+      });
+    });
+
+    // Handle sending messages ✅
     socket.on("message", async (data) => {
       try {
         // Save message to database
@@ -69,7 +127,7 @@ export function chatNamespaceHandler() {
       }
     });
 
-    // Handle marking messages as read
+    // Handle marking messages as read ✅
     socket.on("read", async (data) => {
       try {
         const updatedMessages = await markMessagesAsRead(
@@ -80,7 +138,7 @@ export function chatNamespaceHandler() {
         // Notify senders that their messages were read
         for (const messageId of data.message_ids) {
           const message = await getMessage(messageId);
-          console.log(message)
+          console.log(message);
           if (message && message.sender_id.toString() !== socket.userId) {
             socket.to(`user_${message.sender_id}`).emit("read", {
               message_id: messageId,
@@ -158,51 +216,6 @@ export function chatNamespaceHandler() {
           message: "Failed to delete message",
         });
       }
-    });
-
-    // Handle getting online users (when user connects)
-    socket.on("join_chat", async () => {
-      try {
-        // Get all online user IDs except current user
-        const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
-          (userId) => userId !== socket.userId
-        );
-
-        // Get user details for online users
-        const onlineUsers = await User.find({
-          _id: { $in: onlineUserIds },
-        }).select("name email avatar status");
-
-        socket.emit("get_online_users", onlineUserIds);
-
-        // Notify others that this user is online
-        socket.broadcast.emit("user_online", {
-          user_id: socket.userId,
-          user_name: socket.user.name,
-          user_avatar: socket.user.avatar || null,
-          timestamp: new Date(),
-        });
-      } catch (error) {
-        console.error("Get online users error:", error);
-        socket.emit("error", {
-          event: "get_online_users",
-          message: "Failed to get online users",
-        });
-      }
-    });
-
-    socket.on("leave_chat", () => {
-      // Get all online user IDs except current user
-      const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
-        (userId) => userId !== socket.userId
-      );
-
-      socket.emit("get_online_users", onlineUserIds);
-      // Notify others that this user is offline
-      socket.broadcast.emit("user_offline", {
-        user_id: socket.userId,
-        timestamp: new Date(),
-      });
     });
   };
 }

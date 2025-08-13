@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from "react";
+import React, { memo, useEffect, useRef, useState } from "react";
 import { CardHeader, CardTitle } from "../ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { useChatSocketContext } from "@/contexts/ChatSocket";
@@ -12,12 +12,14 @@ const Header = ({ name, avatar, friendId }) => {
   useEffect(() => {
     const typingHandler = getTypingHandler(setIsTyping);
     const statusHandler = getStatusHandler(setStatus, friendId);
+    const onlineUsersHandler = getOnlineUsersHandler(setStatus, friendId);
 
-    socket.on("get_online_users", (data) => {
-      console.log("online users", data);
-    });
+    socket.on("online_user", statusHandler);
+    socket.on("get_online_users", onlineUsersHandler);
     socket.on("typing", typingHandler);
     return () => {
+      socket.off("online_user", statusHandler);
+      socket.off("get_online_users", onlineUsersHandler);
       socket.off("typing", typingHandler);
     };
   }, [socket]);
@@ -63,18 +65,20 @@ function getTypingHandler(setIsTyping) {
   return (data) => {
     const { status } = data;
     setIsTyping(status === "start");
-
-    // Clear typing indicator after 3 seconds if no stop event
-    // if (status === "start") {
-    //   setTimeout(() => setIsTyping(false), 3000);
-    // }
   };
 }
 function getStatusHandler(setStatus, friendId) {
-  return (onlineUserIds) => {
-    setStatus(
-      onlineUserIds.some((id) => id === friendId) ? "online" : "offline"
-    );
+  console.log("friendId", friendId);
+  return (data) => {
+    console.log("onlineUser", data.status);
+    setStatus(data.user_id === friendId && data.status);
+  };
+}
+
+function getOnlineUsersHandler(setStatus, friendId) {
+  return (data) => {
+    console.log("onlineUser", data);
+    setStatus(data.some((u) => u._id === friendId) && "online");
   };
 }
 
