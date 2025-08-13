@@ -9,40 +9,61 @@ export function socketAuthAndMapping(idToSocketMap) {
       return next(new Error("User ID is required"));
     }
 
-    // Set status to "active" in DB
-    let user = null;
     try {
-      user = await User.findByIdAndUpdate(userId, { status: "active" });
+      // Mark user active in DB
+      const updatedUser = await User.findByIdAndUpdate(userId, {
+        status: "online",
+      });
+
+      // Map user → socket
+      idToSocketMap.set(userId, socket.id);
+
+      // Attach to socket for later use
+      socket.userId = userId;
+      socket.idToSocketMap = idToSocketMap;
+      socket.user = updatedUser;
+
+      const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
+        (userId) => userId !== socket.userId
+      );
+
+      socket.emit("get_online_users", onlineUserIds);
+
+      console.log(
+        chalk.greenBright(`[SOCKET CONNECT]`) +
+          ` User: ${chalk.cyan(userId)} | Socket ID: ${chalk.yellow(socket.id)}`
+      );
+
+      // On disconnect
+      socket.on("disconnect", async () => {
+        idToSocketMap.delete(userId);
+
+        const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
+          (userId) => userId !== socket.userId
+        );
+
+        socket.emit("get_online_users", onlineUserIds);
+
+        try {
+          await User.findByIdAndUpdate(userId, { status: "offline" });
+        } catch (err) {
+          console.error(
+            chalk.red(`Error setting user offline: ${err.message}`)
+          );
+        }
+
+        console.log(
+          chalk.redBright(`[SOCKET DISCONNECT]`) +
+            ` User: ${chalk.cyan(userId)} | Socket ID: ${chalk.yellow(
+              socket.id
+            )}`
+        );
+      });
+
+      next();
     } catch (err) {
-      console.error("Error setting user active:", err.message);
+      console.error(chalk.red(`Error during socket auth: ${err.message}`));
+      return next(new Error("Authentication or DB update failed"));
     }
-
-    // Save mapping
-    idToSocketMap.set(userId, socket.id);
-
-    // Attach to socket for easy access later
-    socket.userId = userId;
-    socket.idToSocketMap = idToSocketMap;
-    socket.user = user;
-
-    console.log(
-      chalk.yellowBright(`User ${userId} connected with socket ID ${socket.id}`)
-    );
-
-    // Remove mapping when disconnected
-    socket.on("disconnect", async () => {
-      // Remove mapping
-      idToSocketMap.delete(userId);
-
-      // Set status to "offline" in DB
-      try {
-        await User.findByIdAndUpdate(userId, { status: "offline" });
-      } catch (err) {
-        console.error("Error setting user offline:", err.message);
-      }
-      console.log(`User ${userId} disconnected`);
-    });
-
-    next();
   };
 }

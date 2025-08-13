@@ -6,6 +6,7 @@ import cors from "cors";
 import authRoutes from "./auth/routes.js";
 import friendshipRoutes from "./friend-managment/route.js";
 import userRoutes from "./user-managment/route.js";
+import messagingRoutes from "./messaging/route.js"
 import { errorHandler } from "../middleware/errorMiddleware.js";
 
 const app = express();
@@ -29,6 +30,9 @@ app.use("/friendship", friendshipRoutes);
 
 // user-managment namespace
 app.use("/user", userRoutes);
+
+// messaging namespace
+app.use("/messages",messagingRoutes)
 
 app.use(errorHandler);
 

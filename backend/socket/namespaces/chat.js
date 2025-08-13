@@ -5,8 +5,6 @@ import chalk from "chalk";
 
 export function chatNamespaceHandler() {
   return (socket) => {
-    console.log(socket.idToSocketMap);
-    console.log(`User ${socket.userId} connected to chat namespace`);
 
     // Join user to their personal room for direct messaging
     socket.join(`user_${socket.userId}`);
@@ -82,6 +80,7 @@ export function chatNamespaceHandler() {
         // Notify senders that their messages were read
         for (const messageId of data.message_ids) {
           const message = await getMessage(messageId);
+          console.log(message)
           if (message && message.sender_id.toString() !== socket.userId) {
             socket.to(`user_${message.sender_id}`).emit("read", {
               message_id: messageId,
@@ -106,7 +105,7 @@ export function chatNamespaceHandler() {
       }
     });
 
-    // Handle typing indicators
+    // Handle typing indicators ✅
     socket.on("typing", (data) => {
       // Validate recipient
       if (!data.recipient_id) return;
@@ -162,7 +161,7 @@ export function chatNamespaceHandler() {
     });
 
     // Handle getting online users (when user connects)
-    socket.on("get_online_users", async () => {
+    socket.on("join_chat", async () => {
       try {
         // Get all online user IDs except current user
         const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
@@ -174,7 +173,7 @@ export function chatNamespaceHandler() {
           _id: { $in: onlineUserIds },
         }).select("name email avatar status");
 
-        socket.emit("get_online_users", onlineUsers);
+        socket.emit("get_online_users", onlineUserIds);
 
         // Notify others that this user is online
         socket.broadcast.emit("user_online", {
@@ -192,18 +191,17 @@ export function chatNamespaceHandler() {
       }
     });
 
-    // Handle disconnect
-    socket.on("disconnect", () => {
-      console.log(`User ${socket.userId} disconnected from chat namespace`);
+    socket.on("leave_chat", () => {
+      // Get all online user IDs except current user
+      const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
+        (userId) => userId !== socket.userId
+      );
 
-      // Remove from socket map
-      socket.idToSocketMap.delete(socket.userId);
-
-      // Notify others that user went offline
+      socket.emit("get_online_users", onlineUserIds);
+      // Notify others that this user is offline
       socket.broadcast.emit("user_offline", {
         user_id: socket.userId,
-        user_name: socket.user.name,
-        last_seen: new Date(),
+        timestamp: new Date(),
       });
     });
   };

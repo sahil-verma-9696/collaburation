@@ -101,7 +101,7 @@ GET    /api/friends/requests/sent
 GET    /api/friends/requests/received
 ```
 
-4. **Messagin(for reliability)**
+4. **Messaging(for reliability)**
 ```plain
 POST   /api/messages
 GET    /api/messages/{user_id}?page={n}&limit={n}
@@ -124,3 +124,6 @@ PUT    /api/notifications/mark-all-read
 DELETE /api/notifications/{notification_id}
 ```
 
+# Messagin approach
+
+client -> server

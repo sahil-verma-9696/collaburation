@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useChatSocketContext } from "@/contexts/ChatSocket";
+import { useGlobalContext } from "@/contexts/Global";
 
 export function FriendsList({ onSelectFriend, selectedFriendId }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -15,32 +15,47 @@ export function FriendsList({ onSelectFriend, selectedFriendId }) {
   const [friends, setFriends] = useState([]);
   const [receivedRequests, setReceivedRequests] = useState([]);
   const [sentRequests, setSentRequests] = useState([]);
+  const { user } = useGlobalContext();
 
   // get all friends ✅
   const friendsRef = useRef(null);
-  async function getFriends() {
+
+  /**
+   * @description get all friends
+   * @param {function} setFriends
+   */
+  async function getFriends(setFriends) {
     const res = await fetch("http://localhost:8000/friendship", {
       credentials: "include",
     });
     const data = await res.json();
     const friends = data
       .filter((friendship) => friendship.status === "accepted")
-      .map((friendship) => ({
-        ...friendship.recipient_id,
-      }));
+      .map((friendship) => {
+        const requester = friendship.requester_id;
+        const recipient = friendship.recipient_id;
+        if (requester._id === user._id) {
+          return recipient;
+        }
+        if (recipient._id === user._id) {
+          return requester;
+        }
+        return null;
+      });
 
-    console.log(friends);
     setFriends(friends);
   }
   if (!friendsRef.current) {
-    getFriends();
+    getFriends(setFriends);
     friendsRef.current = true;
   }
 
-  // get all received friend requests
   const friendReqRef = useRef(null);
-  async function getFriendRequests() {
-    //✅
+  /**
+   * @description get all received friend requests
+   * @param {function} setReceivedRequests
+   */
+  async function getFriendRequests(setReceivedRequests) {
     const res = await fetch(
       "http://localhost:8000/friendship/requests/received",
       {
@@ -51,13 +66,16 @@ export function FriendsList({ onSelectFriend, selectedFriendId }) {
     setReceivedRequests(data);
   }
   if (!friendReqRef.current) {
-    getFriendRequests();
+    getFriendRequests(setReceivedRequests);
     friendReqRef.current = true;
   }
 
-  // get all sent friendrequests 
   const sentReqRef = useRef(null);
-  async function getSentRequests() {
+  /**
+   * @description get all sent friend requests
+   * @param {function} setSentRequests
+   */
+  async function getSentRequests(setSentRequests) {
     const res = await fetch("http://localhost:8000/friendship/requests/sent", {
       credentials: "include",
     });
@@ -65,13 +83,15 @@ export function FriendsList({ onSelectFriend, selectedFriendId }) {
     setSentRequests(data);
   }
   if (!sentReqRef.current) {
-    getSentRequests();
+    getSentRequests(setSentRequests);
     sentReqRef.current = true;
   }
 
-  const searchUsers = async () => {
-    // ✅
-    console.log("hello to search");
+  /**
+   * @description search user by name ✅
+   * @param {string} searchQuery
+   */
+  const searchUsers = async (searchQuery) => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
       return;
@@ -80,8 +100,11 @@ export function FriendsList({ onSelectFriend, selectedFriendId }) {
     setSearchResults(filtered);
   };
 
+  /**
+   * @description send friend request to user ✅
+   * @param {string} userId
+   */
   const sendFriendRequest = async (userId) => {
-    //✅
     await fetch("http://localhost:8000/friendship/request", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -92,8 +115,25 @@ export function FriendsList({ onSelectFriend, selectedFriendId }) {
     setSearchQuery("");
   };
 
-  const handleFriendRequest = (requestId, action) => {
-    setReceivedRequests((prev) => prev.filter((req) => req._id !== requestId));
+  /**
+   * @description handle friend request accept or reject ✅
+   * @param {string} friendshipId
+   * @param {"accept" | "reject"} action
+   */
+  const handleFriendRequest = async (friendshipId, action) => {
+    if (action === "accept") {
+      await fetch(`http://localhost:8000/friendship/${friendshipId}/accept`, {
+        method: "PUT",
+        credentials: "include",
+      });
+    }
+
+    if (action === "reject") {
+      await fetch(`http://localhost:8000/friendship/${friendshipId}/reject`, {
+        method: "PUT",
+        credentials: "include",
+      });
+    }
   };
 
   const getStatusColor = (status) => {
@@ -107,9 +147,6 @@ export function FriendsList({ onSelectFriend, selectedFriendId }) {
     }
   };
 
-  const { socket } = useChatSocketContext();
-
-  console.log(socket);
   return (
     <div className="w-80 border-r bg-muted/10">
       <div className="p-4">
@@ -180,9 +217,11 @@ export function FriendsList({ onSelectFriend, selectedFriendId }) {
                 placeholder="Search users..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && searchUsers()}
+                onKeyPress={(e) =>
+                  e.key === "Enter" && searchUsers(searchQuery)
+                }
               />
-              <Button onClick={searchUsers}>
+              <Button onClick={() => searchUsers(searchQuery)}>
                 <Search className="h-4 w-4" />
               </Button>
             </div>
@@ -251,7 +290,7 @@ export function FriendsList({ onSelectFriend, selectedFriendId }) {
                           size="sm"
                           variant="outline"
                           onClick={() =>
-                            handleFriendRequest(request.requester_id._id, "accept")
+                            handleFriendRequest(request._id, "accept")
                           }
                         >
                           <Check className="h-3 w-3" />
@@ -260,7 +299,7 @@ export function FriendsList({ onSelectFriend, selectedFriendId }) {
                           size="sm"
                           variant="outline"
                           onClick={() =>
-                            handleFriendRequest(request.requester_id._id, "reject")
+                            handleFriendRequest(request._id, "reject")
                           }
                         >
                           <X className="h-3 w-3" />

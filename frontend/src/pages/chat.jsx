@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChatInterface } from "@/components/chat/chat-interface";
+import ChatInterface from "@/components/chat/chat-interface";
 import { FriendsList } from "@/components/chat/friends-list";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,17 +8,20 @@ import { useGlobalContext } from "@/contexts/Global";
 import { useNavigate } from "react-router";
 import Header from "@/components/chat/header";
 
-export default function ChatPage() {
-  const { user, setUser } = useGlobalContext();
-  const navigate = useNavigate();
+const ChatPage = () => {
   const [selectedFriend, setSelectedFriend] = useState(null);
+  const navigate = useNavigate();
+
+  const { user, setUser } = useGlobalContext();
 
   const handleSelectFriend = (friend) => {
     setSelectedFriend(friend);
   };
 
   const handleLogout = async () => {
-    const res = await fetch("/auth/logout", { credentials: "include" });
+    const res = await fetch("http://localhost:8000/auth/logout", {
+      credentials: "include",
+    });
     if (res.ok) {
       navigate("/");
       setUser(null);
@@ -57,4 +60,6 @@ export default function ChatPage() {
       </div>
     </div>
   );
-}
+};
+
+export default ChatPage;
