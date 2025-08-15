@@ -10,14 +10,28 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useChatSocketContext } from "@/contexts/ChatSocket";
+import { useEffect, useState } from "react";
 
 export function Notifications({
   notifications = [],
-  unreadCount = 0,
   onMarkAllAsRead,
   onMarkAsRead,
   onDelete,
 }) {
+  const [unreadCount, setUnreadCount] = useState(0);
+  const { socket } = useChatSocketContext();
+  useEffect(() => {
+    if (!socket) return;
+    const wsNotificationHandler = (data) => {
+      console.log(data);
+      setUnreadCount(data.count);
+    };
+    socket.on("new_notification", wsNotificationHandler);
+    return () => {
+      socket.off("new_notification", wsNotificationHandler);
+    };
+  });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

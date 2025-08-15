@@ -1,5 +1,6 @@
 import Message from "../../models/Message.js";
 import Friendship from "../../models/Friendship.js";
+import Notification from "../../models/Notification.js";
 import User from "../../models/User.js";
 import chalk from "chalk";
 
@@ -7,10 +8,6 @@ export function chatNamespaceHandler(namespace) {
   return (socket) => {
     // Join user to their personal room for direct messaging
     socket.join(`user_${socket.userId}`);
-
-    socket.on("test", () => {
-      console.log(chalk.magenta(`[TEST] : `), socket.userId);
-    });
 
     // Handle getting online users (when user connects)
     socket.on("join_chat", async (data) => {
@@ -103,7 +100,44 @@ export function chatNamespaceHandler(namespace) {
           is_own_message: false,
         };
 
-        // Send to recipient
+        // Check if recipient is online
+        const recipientStatus = socket.idToStatusMap.get(data.recipient_id);
+        const isRecipientOnline =
+          recipientStatus && recipientStatus.status === "online";
+
+        if (!isRecipientOnline) {
+          // Recipient is not online - create notification
+          console.log(
+            chalk.yellow(
+              `[OFFLINE RECIPIENT] Creating notification for user: ${data.recipient_id}`
+            )
+          );
+
+          try {
+            await createMessageNotification({
+              recipientId: data.recipient_id,
+              senderId: socket.userId,
+              messageId: populatedMessage._id,
+              senderName: socket.user.name,
+              messageContent: populatedMessage.content,
+            });
+            console.log(
+              chalk.green(
+                `[NOTIFICATION CREATED] For message to offline user: ${data.recipient_id}`
+              )
+            );
+          } catch (notificationError) {
+            console.error(chalk.red("[NOTIFICATION ERROR]"), notificationError);
+          }
+          const notifications = await getUnreadNotifications(data.recipient_id);
+          
+          // TODO : send Notification
+          socket.to(`user_${data.recipient_id}`).emit("new_notification", {
+            count: notifications.length,
+          });
+        }
+
+        // Send to recipient (if online)
         socket
           .to(`user_${data.recipient_id}`)
           .emit("message", messageForRecipient);
@@ -139,6 +173,9 @@ export function chatNamespaceHandler(namespace) {
           data.message_ids,
           socket.userId
         );
+
+        // Mark related notifications as read
+        await markMessageNotificationsAsRead(data.message_ids, socket.userId);
 
         // Notify senders that their messages were read
         for (const messageId of data.message_ids) {
@@ -200,6 +237,9 @@ export function chatNamespaceHandler(namespace) {
 
         await deleteMessage(data.message_id);
 
+        // Delete related notifications
+        await deleteMessageNotifications(data.message_id);
+
         const deleteData = {
           message_id: data.message_id,
           deleted_by: socket.userId,
@@ -219,6 +259,43 @@ export function chatNamespaceHandler(namespace) {
         socket.emit("error", {
           event: "delete",
           message: "Failed to delete message",
+        });
+      }
+    });
+
+    // Handle getting unread notifications
+    socket.on("get_notifications", async () => {
+      try {
+        const notifications = await getUnreadNotifications(socket.userId);
+        socket.emit("notifications", {
+          notifications,
+          count: notifications.length,
+        });
+      } catch (error) {
+        console.error("Get notifications error:", error);
+        socket.emit("error", {
+          event: "get_notifications",
+          message: "Failed to get notifications",
+        });
+      }
+    });
+
+    // Handle marking notifications as read
+    socket.on("mark_notifications_read", async (data) => {
+      try {
+        await markNotificationsAsRead(
+          data.notification_ids || [],
+          socket.userId
+        );
+        socket.emit("notifications_marked_read", {
+          notification_ids: data.notification_ids,
+          confirmed: true,
+        });
+      } catch (error) {
+        console.error("Mark notifications read error:", error);
+        socket.emit("error", {
+          event: "mark_notifications_read",
+          message: "Failed to mark notifications as read",
         });
       }
     });
@@ -286,6 +363,138 @@ async function deleteMessage(messageId) {
     throw error;
   }
 }
+
+// Notification helper functions
+
+async function createMessageNotification({
+  recipientId,
+  senderId,
+  messageId,
+  senderName,
+  messageContent,
+}) {
+  try {
+    // Check if there's already a notification for this message
+    const existingNotification = await Notification.findOne({
+      user_id: recipientId,
+      type: "message",
+      related_id: messageId,
+    });
+
+    if (existingNotification) {
+      console.log(`Notification already exists for message: ${messageId}`);
+      return existingNotification;
+    }
+
+    const notification = new Notification({
+      user_id: recipientId,
+      type: "message",
+      related_id: messageId,
+      is_read: false,
+      created_at: new Date(),
+      // Optional: Add metadata for rich notifications
+      metadata: {
+        sender_id: senderId,
+        sender_name: senderName,
+        message_preview: messageContent.substring(0, 100), // First 100 characters
+        created_at: new Date(),
+      },
+    });
+
+    const savedNotification = await notification.save();
+    console.log(
+      chalk.green(`[NOTIFICATION SAVED] ID: ${savedNotification._id}`)
+    );
+    return savedNotification;
+  } catch (error) {
+    console.error("Error creating message notification:", error);
+    throw error;
+  }
+}
+
+async function getUnreadNotifications(userId) {
+  try {
+    const notifications = await Notification.find({
+      user_id: userId,
+      is_read: false,
+    })
+      .populate("related_id") // Populate the message
+      .sort({ created_at: -1 })
+      .limit(50); // Limit to recent 50 notifications
+
+    return notifications;
+  } catch (error) {
+    console.error("Error getting unread notifications:", error);
+    throw error;
+  }
+}
+
+async function markMessageNotificationsAsRead(messageIds, userId) {
+  try {
+    const result = await Notification.updateMany(
+      {
+        user_id: userId,
+        type: "message",
+        related_id: { $in: messageIds },
+        is_read: false,
+      },
+      {
+        is_read: true,
+        read_at: new Date(),
+      }
+    );
+
+    console.log(
+      chalk.blue(`[NOTIFICATIONS MARKED READ] Count: ${result.modifiedCount}`)
+    );
+    return result;
+  } catch (error) {
+    console.error("Error marking message notifications as read:", error);
+    throw error;
+  }
+}
+
+async function markNotificationsAsRead(notificationIds, userId) {
+  try {
+    const result = await Notification.updateMany(
+      {
+        _id: { $in: notificationIds },
+        user_id: userId,
+        is_read: false,
+      },
+      {
+        is_read: true,
+        read_at: new Date(),
+      }
+    );
+
+    return result;
+  } catch (error) {
+    console.error("Error marking notifications as read:", error);
+    throw error;
+  }
+}
+
+async function deleteMessageNotifications(messageId) {
+  try {
+    const result = await Notification.deleteMany({
+      type: "message",
+      related_id: messageId,
+    });
+
+    console.log(
+      chalk.yellow(
+        `[NOTIFICATIONS DELETED] Count: ${result.deletedCount} for message: ${messageId}`
+      )
+    );
+    return result;
+  } catch (error) {
+    console.error("Error deleting message notifications:", error);
+    throw error;
+  }
+}
+
+// Existing helper functions (unchanged)
 
 async function getUserFriends(userId) {
   try {

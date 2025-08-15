@@ -1,10 +1,14 @@
 import { LogOut, MessageCircle } from "lucide-react";
-import React from "react";
+import React, { useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Notifications } from "@/components/chat/notifications";
 import { Button } from "@/components/ui/button";
+import { useChatSocketContext } from "@/contexts/ChatSocket";
 
 export default function Header({ name, handleLogout }) {
+  const { socket } = useChatSocketContext();
+
+
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center justify-between p-4">

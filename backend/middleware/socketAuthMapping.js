@@ -60,10 +60,6 @@ export function socketAuthAndMapping(
           lastSeen: new Date().toString(),
         });
 
-        // const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
-        //   (userId) => userId !== socket.userId
-        // );
-
         namespace.emit("get_online_users", Object.fromEntries(idToStatusMap));
 
         try {
