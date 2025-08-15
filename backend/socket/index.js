@@ -13,13 +13,22 @@ function initialiseSocketServer(httpServer, options) {
   });
 
   const idToSocketMap = new Map();
+  const idToStatusMap = new Map();
+  const activeUsersIds = new Set();
+  const onlineUsersIds = new Set();
 
   const namespaces = ["/ws", "/ws/chat", "/ws/notifications"];
 
   namespaces.forEach((ns) => {
     const namespaceInstance = socketServer.of(ns);
     namespaceInstance.use(
-      socketAuthAndMapping(namespaceInstance, idToSocketMap)
+      socketAuthAndMapping(
+        namespaceInstance,
+        idToSocketMap,
+        activeUsersIds,
+        onlineUsersIds,
+        idToStatusMap
+      )
     );
   });
 

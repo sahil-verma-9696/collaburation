@@ -8,29 +8,29 @@ export function chatNamespaceHandler(namespace) {
     // Join user to their personal room for direct messaging
     socket.join(`user_${socket.userId}`);
 
-    // socket.on("get_online_users", async () => {
-    //   // Get all online user IDs except current user
-    //   const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
-    //     (userId) => userId !== socket.userId
-    //   );
-    // });
+    socket.on("test", () => {
+      console.log(chalk.magenta(`[TEST] : `), socket.userId);
+    });
 
     // Handle getting online users (when user connects)
     socket.on("join_chat", async (data) => {
       try {
-        // Get all online user IDs except current user
-        const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
-          (userId) => userId !== socket.userId
+        socket.onlineUsersIds.add(socket.userId);
+        socket.idToStatusMap.set(socket.userId, {
+          status: "online",
+          lastSeen: new Date().toString(),
+          for: data.friendId,
+        });
+        console.log(
+          chalk.magenta("[JOIN CHAT] "),
+          chalk.cyanBright(`[ONLINE USERS]`),
+          socket.onlineUsersIds
         );
 
-        await User.findByIdAndUpdate(socket.userId, { status: "online" });
-
-        // Get user details for online users
-        const onlineUsers = await User.find({
-          status: "online",
-        }).select("name email avatar status");
-
-        socket.emit("get_online_users", onlineUsers);
+        namespace.emit(
+          "get_online_users",
+          Object.fromEntries(socket.idToStatusMap)
+        );
 
         // Notify others that this user is online
         socket.broadcast.emit("online_user", {
@@ -49,16 +49,21 @@ export function chatNamespaceHandler(namespace) {
       }
     });
 
-    socket.on("leave_chat", async () => {
-      await User.findByIdAndUpdate(socket.userId, { status: "active" });
-
-      // Get user details for online users
-      const onlineUsers = await User.find({
-        status: "online",
-      }).select("name email avatar status");
-
-      socket.emit("get_online_users", onlineUsers);
-
+    socket.on("leave_chat", async (data) => {
+      socket.onlineUsersIds.delete(socket.userId);
+      socket.idToStatusMap.set(socket.userId, {
+        status: "active",
+        lastSeen: new Date().toString(),
+      });
+      console.log(
+        chalk.magenta("[LEAVE CHAT] "),
+        chalk.cyanBright(`[ONLINE USERS]`),
+        socket.onlineUsersIds
+      );
+      namespace.emit(
+        "get_online_users",
+        Object.fromEntries(socket.idToStatusMap)
+      );
       // Notify others that this user is offline
       socket.broadcast.emit("online_user", {
         user_id: socket.userId,

@@ -1,4 +1,4 @@
-import { useState, memo, useCallback } from "react";
+import { useState, memo, useCallback, useEffect, useRef } from "react";
 import { Send, Paperclip } from "lucide-react";
 
 import { useChatSocketContext } from "@/contexts/ChatSocket";
@@ -14,10 +14,36 @@ const ChatInterface = ({ friend }) => {
   const [typingTimeout, setTypingTimeout] = useState(null);
   const [messages, setMessages] = useState([]);
 
+  const isMountedRef = useRef(true);
+  const hasJoinedRef = useRef(false);
+
   const { socket } = useChatSocketContext();
   const { user } = useGlobalContext();
 
-  
+  // StrictMode-safe approach: Use effect cleanup to track mount state
+  useEffect(() => {
+    let isCleanedUp = false;
+
+    // Only emit join_chat if we haven't been cleaned up
+    const joinChat = () => {
+      if (!isCleanedUp) {
+        socket.emit("join_chat", { friendId: friend._id });
+        console.log("emit join chat");
+      }
+    };
+
+    // Small delay to handle StrictMode double mounting
+    const timeoutId = setTimeout(joinChat, 0);
+
+    return () => {
+      isCleanedUp = true;
+      clearTimeout(timeoutId);
+
+      // Always emit leave_chat on cleanup
+      socket.emit("leave_chat", { friendId: friend._id });
+      console.log("emit leave chat");
+    };
+  }, [socket]);
 
   const memoSetMessages = useCallback(setMessages, []);
 
@@ -112,6 +138,7 @@ const ChatInterface = ({ friend }) => {
         name={friend.name}
         avatar={friend.avatar}
         friendId={friend._id}
+        userId={user._id}
         status={friend.status}
       />
 

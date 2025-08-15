@@ -3,7 +3,7 @@ import { CardHeader, CardTitle } from "../ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { useChatSocketContext } from "@/contexts/ChatSocket";
 
-const Header = ({ name, avatar, friendId }) => {
+const Header = ({ name, avatar, friendId, userId }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [status, setStatus] = useState("offline");
 
@@ -11,14 +11,15 @@ const Header = ({ name, avatar, friendId }) => {
 
   useEffect(() => {
     const typingHandler = getTypingHandler(setIsTyping);
-    const statusHandler = getStatusHandler(setStatus, friendId);
-    const onlineUsersHandler = getOnlineUsersHandler(setStatus, friendId);
+    const onlineUsersHandler = getOnlineUsersHandler(
+      setStatus,
+      friendId,
+      userId
+    );
 
-    socket.on("online_user", statusHandler);
     socket.on("get_online_users", onlineUsersHandler);
     socket.on("typing", typingHandler);
     return () => {
-      socket.off("online_user", statusHandler);
       socket.off("get_online_users", onlineUsersHandler);
       socket.off("typing", typingHandler);
     };
@@ -67,18 +68,32 @@ function getTypingHandler(setIsTyping) {
     setIsTyping(status === "start");
   };
 }
-function getStatusHandler(setStatus, friendId) {
-  console.log("friendId", friendId);
-  return (data) => {
-    console.log("onlineUser", data.status);
-    setStatus(data.user_id === friendId && data.status);
-  };
-}
 
-function getOnlineUsersHandler(setStatus, friendId) {
+function getOnlineUsersHandler(setStatus, friendId, userId) {
   return (data) => {
-    console.log("onlineUser", data);
-    setStatus(data.some((u) => u._id === friendId) && "online");
+    // console.log("onlineUser", data);
+    if (typeof data === "object") {
+      if (data[friendId]) {
+        setStatus(() => {
+          switch (data[friendId].status) {
+            case "offline":
+              return new Date(data[friendId].lastSeen).toLocaleTimeString();
+
+            case "active":
+              return "active";
+
+            case "online":
+              if (data[friendId].for === userId) {
+                return "online";
+              }
+              return "away";
+            default:
+              return "offline";
+              break;
+          }
+        });
+      }
+    }
   };
 }
 

@@ -1,7 +1,13 @@
 import chalk from "chalk";
 import User from "../models/User.js";
 
-export function socketAuthAndMapping(namespace, idToSocketMap) {
+export function socketAuthAndMapping(
+  namespace,
+  idToSocketMap,
+  activeUsersIds,
+  onlineUsersIds,
+  idToStatusMap
+) {
   return async (socket, next) => {
     const { id: userId } = socket.handshake.query;
 
@@ -18,29 +24,47 @@ export function socketAuthAndMapping(namespace, idToSocketMap) {
       // Map user → socket
       idToSocketMap.set(userId, socket.id);
 
+      idToStatusMap.set(userId, {
+        status: "active",
+        lastSeen: new Date().toString(),
+      });
+
+      // Add user to active users list
+      activeUsersIds.add(userId);
+
       // Attach to socket for later use
       socket.userId = userId;
       socket.idToSocketMap = idToSocketMap;
       socket.user = updatedUser;
+      socket.activeUsersIds = activeUsersIds;
+      socket.onlineUsersIds = onlineUsersIds;
+      socket.idToStatusMap = idToStatusMap;
 
-      const onlineUserIds = Array.from(socket.idToSocketMap.keys());
+      // const onlineUserIds = Array.from(socket.idToSocketMap.keys());
 
-      namespace.emit("active_users", onlineUserIds);
+      namespace.emit("get_online_users", Object.fromEntries(idToStatusMap));
 
       console.log(
         chalk.greenBright(`[SOCKET CONNECT]`) +
           ` User: ${chalk.cyan(userId)} | Socket ID: ${chalk.yellow(socket.id)}`
       );
 
+      console.log(chalk.cyanBright(`[ACTIVE USERS]`), activeUsersIds);
+
       // On disconnect
       socket.on("disconnect", async () => {
         idToSocketMap.delete(userId);
+        activeUsersIds.delete(userId);
+        idToStatusMap.set(userId, {
+          status: "offline",
+          lastSeen: new Date().toString(),
+        });
 
-        const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
-          (userId) => userId !== socket.userId
-        );
+        // const onlineUserIds = Array.from(socket.idToSocketMap.keys()).filter(
+        //   (userId) => userId !== socket.userId
+        // );
 
-        namespace.emit("active_users", onlineUserIds);
+        namespace.emit("get_online_users", Object.fromEntries(idToStatusMap));
 
         try {
           await User.findByIdAndUpdate(userId, { status: "offline" });
@@ -56,6 +80,8 @@ export function socketAuthAndMapping(namespace, idToSocketMap) {
               socket.id
             )}`
         );
+        console.log(chalk.cyanBright(`[ACTIVE USERS]`), activeUsersIds);
+        // console.log(chalk.cyanBright(`[ONLINE USERS]`), onlineUsersIds);
       });
 
       next();
