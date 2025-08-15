@@ -4,10 +4,14 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 
 import authRoutes from "./auth/routes.js";
-import friendshipRoutes from "./friend-managment/route.js";
 import userRoutes from "./user-managment/route.js";
-import messagingRoutes from "./messaging/route.js"
+import messagingRoutes from "./messaging/route.js";
+import attachmentsRoutes from "./attachments/route.js";
+import friendshipRoutes from "./friend-managment/route.js";
+import notificationRoutes from "./notifications/route.js";
+
 import { errorHandler } from "../middleware/errorMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const app = express();
 
@@ -26,16 +30,28 @@ app.use(
 app.use("/auth", authRoutes);
 
 // friend-managment namespace
-app.use("/friendship", friendshipRoutes);
+app.use("/friendship", protect, friendshipRoutes);
 
 // user-managment namespace
-app.use("/user", userRoutes);
+app.use("/user", protect, userRoutes);
 
 // messaging namespace
-app.use("/messages",messagingRoutes)
+app.use("/messages", protect, messagingRoutes);
 
+// attachments namespace
+app.use("/attachments", protect, attachmentsRoutes);
+
+// notifications namespace
+app.use("/notifications", protect, notificationRoutes)
+
+// hanndle errors
 app.use(errorHandler);
 
+/**
+ *
+ * @param {number} PORT
+ * @returns {object} httpServer
+ */
 function getHttpServer(PORT) {
   const HOST = "localhost";
   const httpServer = app.listen(PORT, HOST, () =>

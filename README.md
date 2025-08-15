@@ -83,7 +83,7 @@ POST   /api/auth/logout
 GET    /api/auth/me
 ```
 
-2. **User Management**
+2. **User Management** ✅
 ```plain
 GET    /api/users/search?q={name}
 GET    /api/users/profile/{user_id}
@@ -101,7 +101,7 @@ GET    /api/friends/requests/sent
 GET    /api/friends/requests/received
 ```
 
-4. **Messaging(for reliability)**
+4. **Messaging(for reliability)** ✅
 ```plain
 POST   /api/messages
 GET    /api/messages/{user_id}?page={n}&limit={n}
@@ -109,8 +109,9 @@ PUT    /api/messages/{message_id}/read
 DELETE /api/messages/{message_id}
 ```
 
-5. **Attachments**
+5. **Attachments** ✅
 ```plain
+GET   /api/attachments/upload-cred
 POST   /api/attachments/upload
 GET    /api/attachments/{attachment_id}
 DELETE /api/attachments/{attachment_id}
@@ -118,6 +119,7 @@ DELETE /api/attachments/{attachment_id}
 
 6. **Notifications**
 ```plain
+POST   /api/notifications
 GET    /api/notifications
 PUT    /api/notifications/{notification_id}/read
 PUT    /api/notifications/mark-all-read
